@@ -58,7 +58,7 @@ This creates:
 - RLS policies for owner-scoped reads
 - Trigger that auto-creates profile + account + wallet when a new auth user signs up
 
-Migration files: `supabase/migrations/202602270001_init_bank_schema.sql`, `supabase/migrations/202602270002_auth_onboarding.sql`, and `supabase/migrations/202602270003_wallets.sql`
+Migration files: `supabase/migrations/202602270001_init_bank_schema.sql`, `supabase/migrations/202602270002_auth_onboarding.sql`, `supabase/migrations/202602270003_wallets.sql`, and `supabase/migrations/202602270004_harden_profile_onboarding_access.sql`
 
 ## 5) Run the API locally
 
@@ -143,5 +143,6 @@ vercel --prod
 - Email confirmation behavior depends on your Supabase Auth settings.
 - OTP delivery uses a mock provider pattern; in non-production the test OTP is returned in the API response for demo/testing.
 - Successful OTP verification marks `basic_verification_complete` as true (`"Basic Verification Complete"`).
+- Profile onboarding/security fields are write-protected from direct client JWT access; they must be changed through trusted backend logic (service-role API paths).
 - For local Supabase stack, see `supabase/config.toml`.
 - For Vercel, avoid long-running background jobs in this API process; use separate workers/queues when needed.
