@@ -56,9 +56,20 @@ declare
   v_recipient_wallet public.wallets%rowtype;
   v_transaction_id uuid;
   v_amount numeric(14,2);
+  v_authenticated_user_id uuid;
 begin
+  v_authenticated_user_id := auth.uid();
+
+  if v_authenticated_user_id is null then
+    raise exception 'authentication required';
+  end if;
+
   if p_sender_user_id is null or p_recipient_user_id is null then
     raise exception 'sender and recipient are required';
+  end if;
+
+  if p_sender_user_id <> v_authenticated_user_id then
+    raise exception 'sender must match authenticated user';
   end if;
 
   if p_sender_user_id = p_recipient_user_id then
@@ -73,7 +84,7 @@ begin
 
   select * into v_sender_wallet
   from public.wallets
-  where user_id = p_sender_user_id
+  where user_id = v_authenticated_user_id
   for update;
 
   if not found then
@@ -124,7 +135,7 @@ begin
     (
       select id
       from public.accounts
-      where user_id = p_sender_user_id
+      where user_id = v_authenticated_user_id
       limit 1
     ),
     v_amount,
@@ -135,7 +146,7 @@ begin
     'posted',
     gen_random_uuid()::text,
     jsonb_build_object(
-      'sender_user_id', p_sender_user_id,
+      'sender_user_id', v_authenticated_user_id,
       'recipient_user_id', p_recipient_user_id,
       'currency', v_sender_wallet.currency
     )
