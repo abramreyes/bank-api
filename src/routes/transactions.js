@@ -86,17 +86,25 @@ export function transactionsRouter({ supabaseAdmin }) {
     let resolvedRecipientUserId = recipientUserId;
 
     if (!resolvedRecipientUserId && recipientPhone) {
-      const { data: recipientProfile, error: recipientProfileError } = await supabaseAdmin
+      const { data: recipientProfiles, error: recipientProfileError } = await supabaseAdmin
         .from('profiles')
         .select('id')
         .eq('phone', recipientPhone)
-        .single();
+        .limit(2);
 
-      if (recipientProfileError || !recipientProfile) {
+      if (recipientProfileError) {
+        return res.status(400).json({ error: recipientProfileError.message });
+      }
+
+      if (!recipientProfiles || recipientProfiles.length === 0) {
         return res.status(404).json({ error: 'Recipient user not found.' });
       }
 
-      resolvedRecipientUserId = recipientProfile.id;
+      if (recipientProfiles.length > 1) {
+        return res.status(409).json({ error: 'Recipient phone matches multiple users.' });
+      }
+
+      resolvedRecipientUserId = recipientProfiles[0].id;
     }
 
     if (!resolvedRecipientUserId && recipientEmail) {
