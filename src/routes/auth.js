@@ -63,6 +63,37 @@ export function authRouter({ supabaseAdmin, supabaseAnon }) {
       return res.status(400).json({ error: 'email and password are required.' });
     }
 
+    const normalizedEmail = email.toLowerCase();
+    const ip = req.ip ?? null;
+    const windowMs = 60_000;
+    const maxAttempts = 5;
+    const windowStart = new Date(Date.now() - windowMs).toISOString();
+
+    const {
+      count: attemptsInWindow,
+      error: attemptsError
+    } = await supabaseAdmin
+      .from('login_attempts')
+      .select('id', { count: 'exact', head: true })
+      .eq('email', normalizedEmail)
+      .eq('ip', ip)
+      .gte('created_at', windowStart);
+
+    if (attemptsError) {
+      return res.status(500).json({ error: 'Failed to check login rate limit.' });
+    }
+
+    if ((attemptsInWindow ?? 0) >= maxAttempts) {
+      res.setHeader('Retry-After', Math.ceil(windowMs / 1000));
+      return res.status(429).json({ error: 'Too many login attempts. Please try again later.' });
+    }
+
+    // Record this attempt regardless of outcome so retries are limited.
+    await supabaseAdmin.from('login_attempts').insert({
+      email: normalizedEmail,
+      ip
+    });
+
     const { data, error } = await supabaseAnon.auth.signInWithPassword({ email, password });
 
     if (error) {
