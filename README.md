@@ -58,7 +58,7 @@ This creates:
 - RLS policies for owner-scoped reads
 - Trigger that auto-creates profile + account + wallet when a new auth user signs up
 
-Migration files: `supabase/migrations/202602270001_init_bank_schema.sql`, `supabase/migrations/202602270002_auth_onboarding.sql`, `supabase/migrations/202602270003_wallets.sql`, and `supabase/migrations/202602270004_harden_profile_onboarding_access.sql`
+Migration files: `supabase/migrations/202602270001_init_bank_schema.sql`, `supabase/migrations/202602270002_auth_onboarding.sql`, `supabase/migrations/202602270003_wallets.sql`, `supabase/migrations/202602270004_harden_profile_onboarding_access.sql`, and `supabase/migrations/202602270005_ledger_engine.sql`
 
 ## 5) Run the API locally
 
@@ -137,6 +137,17 @@ vercel --prod
 
 - `GET /wallets/me`
   - header: `Authorization: Bearer <access_token>`
+
+
+### Transactions
+
+- `GET /transactions/me?limit=50`
+  - header: `Authorization: Bearer <access_token>`
+  - returns ledger-based debit/credit entries for the authenticated wallet, newest first
+- `POST /transactions/transfer`
+  - header: `Authorization: Bearer <access_token>`
+  - body: `{ "recipient_user_id": "<uuid>", "amount": 25.5, "description": "Lunch" }`
+  - executes an atomic double-entry posting (debit sender, credit recipient) in one database transaction
 
 ## Notes
 
