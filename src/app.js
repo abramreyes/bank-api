@@ -6,6 +6,7 @@ import { healthRouter } from './routes/health.js';
 import { authRouter } from './routes/auth.js';
 import { accountsRouter } from './routes/accounts.js';
 import { walletsRouter } from './routes/wallets.js';
+import { transactionsRouter } from './routes/transactions.js';
 
 export function createApp(config) {
   const { admin: supabaseAdmin, anon: supabaseAnon } = createSupabaseClients(config);
@@ -20,6 +21,7 @@ export function createApp(config) {
   app.use('/auth', authRouter({ supabaseAdmin, supabaseAnon }));
   app.use('/accounts', accountsRouter({ supabaseAdmin }));
   app.use('/wallets', walletsRouter({ supabaseAdmin }));
+  app.use('/transactions', transactionsRouter({ supabaseAdmin }));
 
   app.use((error, _req, res, _next) => {
     console.error(error);
