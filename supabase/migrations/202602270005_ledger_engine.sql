@@ -57,6 +57,7 @@ declare
   v_transaction_id uuid;
   v_amount numeric(14,2);
   v_authenticated_user_id uuid;
+  v_locked_wallet public.wallets%rowtype;
 begin
   v_authenticated_user_id := auth.uid();
 
@@ -82,21 +83,25 @@ begin
     raise exception 'amount must be greater than 0';
   end if;
 
-  select * into v_sender_wallet
-  from public.wallets
-  where user_id = v_authenticated_user_id
-  for update;
+  for v_locked_wallet in
+    select *
+    from public.wallets
+    where user_id in (v_authenticated_user_id, p_recipient_user_id)
+    order by wallet_id
+    for update
+  loop
+    if v_locked_wallet.user_id = v_authenticated_user_id then
+      v_sender_wallet := v_locked_wallet;
+    elsif v_locked_wallet.user_id = p_recipient_user_id then
+      v_recipient_wallet := v_locked_wallet;
+    end if;
+  end loop;
 
-  if not found then
+  if v_sender_wallet.wallet_id is null then
     raise exception 'sender wallet not found';
   end if;
 
-  select * into v_recipient_wallet
-  from public.wallets
-  where user_id = p_recipient_user_id
-  for update;
-
-  if not found then
+  if v_recipient_wallet.wallet_id is null then
     raise exception 'recipient wallet not found';
   end if;
 
