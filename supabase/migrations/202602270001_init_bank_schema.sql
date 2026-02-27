@@ -67,6 +67,17 @@ after insert on auth.users
 for each row
 execute function public.handle_new_user();
 
+-- Backfill for existing auth users present before this migration was applied.
+insert into public.profiles (id)
+select u.id
+from auth.users as u
+on conflict (id) do nothing;
+
+insert into public.accounts (user_id)
+select u.id
+from auth.users as u
+on conflict (user_id) do nothing;
+
 alter table public.profiles enable row level security;
 alter table public.accounts enable row level security;
 alter table public.transactions enable row level security;
