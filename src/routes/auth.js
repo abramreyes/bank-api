@@ -1,13 +1,35 @@
+import crypto from 'crypto';
 import { Router } from 'express';
+import { requireAuth } from '../middleware/auth.js';
+
+const OTP_TTL_MINUTES = 10;
+
+function isValidPin(pin) {
+  return /^\d{6}$/.test(pin);
+}
+
+function hashPin(pin) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(pin, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function hashOtp(otp, userId) {
+  return crypto.createHash('sha256').update(`${userId}:${otp}`).digest('hex');
+}
+
+function generateOtp() {
+  return String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+}
 
 export function authRouter({ supabaseAdmin, supabaseAnon }) {
   const router = Router();
 
   router.post('/sign-up', async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, phone } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'email and password are required.' });
+    if (!email || !password || !phone) {
+      return res.status(400).json({ error: 'email, password, and phone are required.' });
     }
 
     const { data, error } = await supabaseAnon.auth.signUp({ email, password });
@@ -16,10 +38,21 @@ export function authRouter({ supabaseAdmin, supabaseAnon }) {
       return res.status(400).json({ error: error.message });
     }
 
+    if (data.user) {
+      const { error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .update({ phone, biometric_enabled: false, basic_verification_complete: false })
+        .eq('id', data.user.id);
+
+      if (profileError) {
+        return res.status(500).json({ error: profileError.message });
+      }
+    }
+
     return res.status(201).json({
       user: data.user,
       session: data.session,
-      message: 'Sign-up successful. Check email confirmation settings in Supabase.'
+      message: 'Sign-up successful. Continue onboarding with OTP verification and PIN setup.'
     });
   });
 
@@ -54,6 +87,133 @@ export function authRouter({ supabaseAdmin, supabaseAnon }) {
     }
 
     return res.json({ user: data.user });
+  });
+
+  router.post('/onboarding/send-otp', requireAuth(supabaseAdmin), async (req, res) => {
+    const otp = generateOtp();
+    const otpHash = hashOtp(otp, req.user.id);
+    const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60_000).toISOString();
+
+    const { error } = await supabaseAdmin.from('onboarding_otps').upsert(
+      {
+        user_id: req.user.id,
+        otp_hash: otpHash,
+        expires_at: expiresAt,
+        attempts: 0
+      },
+      { onConflict: 'user_id' }
+    );
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({
+      message: 'OTP generated and sent via mock SMS provider.',
+      otp_expires_at: expiresAt,
+      test_otp: process.env.NODE_ENV === 'production' ? undefined : otp
+    });
+  });
+
+  router.post('/onboarding/verify-otp', requireAuth(supabaseAdmin), async (req, res) => {
+    const { otp } = req.body;
+
+    if (!/^\d{6}$/.test(otp ?? '')) {
+      return res.status(400).json({ error: 'otp must be a 6-digit code.' });
+    }
+
+    const { data: challenge, error: challengeError } = await supabaseAdmin
+      .from('onboarding_otps')
+      .select('otp_hash,expires_at,attempts')
+      .eq('user_id', req.user.id)
+      .single();
+
+    if (challengeError || !challenge) {
+      return res.status(400).json({ error: 'No OTP challenge found. Request a new OTP.' });
+    }
+
+    if (new Date(challenge.expires_at).getTime() < Date.now()) {
+      return res.status(400).json({ error: 'OTP expired. Request a new OTP.' });
+    }
+
+    const otpHash = hashOtp(otp, req.user.id);
+
+    if (otpHash !== challenge.otp_hash) {
+      await supabaseAdmin
+        .from('onboarding_otps')
+        .update({ attempts: (challenge.attempts ?? 0) + 1 })
+        .eq('user_id', req.user.id);
+
+      return res.status(401).json({ error: 'Invalid OTP.' });
+    }
+
+    const { error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .update({
+        phone_verified_at: new Date().toISOString(),
+        basic_verification_complete: true
+      })
+      .eq('id', req.user.id);
+
+    if (profileError) {
+      return res.status(500).json({ error: profileError.message });
+    }
+
+    await supabaseAdmin.from('onboarding_otps').delete().eq('user_id', req.user.id);
+
+    return res.json({ message: 'OTP verified. Basic Verification Complete.' });
+  });
+
+  router.post('/onboarding/set-pin', requireAuth(supabaseAdmin), async (req, res) => {
+    const { pin } = req.body;
+
+    if (!isValidPin(pin ?? '')) {
+      return res.status(400).json({ error: 'pin must be a 6-digit string.' });
+    }
+
+    const { error } = await supabaseAdmin
+      .from('profiles')
+      .update({ pin_hash: hashPin(pin), pin_set_at: new Date().toISOString() })
+      .eq('id', req.user.id);
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ message: 'PIN setup complete.' });
+  });
+
+  router.post('/onboarding/biometric', requireAuth(supabaseAdmin), async (req, res) => {
+    const { enabled } = req.body;
+
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled must be boolean.' });
+    }
+
+    const { error } = await supabaseAdmin
+      .from('profiles')
+      .update({ biometric_enabled: enabled })
+      .eq('id', req.user.id);
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ message: `Biometric preference ${enabled ? 'enabled' : 'disabled'}.` });
+  });
+
+  router.get('/onboarding/status', requireAuth(supabaseAdmin), async (req, res) => {
+    const { data, error } = await supabaseAdmin
+      .from('profiles')
+      .select('phone,phone_verified_at,pin_set_at,biometric_enabled,basic_verification_complete')
+      .eq('id', req.user.id)
+      .single();
+
+    if (error) {
+      return res.status(404).json({ error: error.message });
+    }
+
+    return res.json({ onboarding: data });
   });
 
   return router;

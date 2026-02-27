@@ -2,7 +2,7 @@
 
 Starter Node.js + Express API for a digital banking mobile application backend using:
 
-- **Supabase Auth** (email + password)
+- **Supabase Auth** (email + password + onboarding flow)
 - **Supabase Postgres migrations** for core banking tables
 - **JWT-protected routes** using Supabase access tokens
 - **Vercel-ready serverless deployment** for temporary hosting
@@ -52,12 +52,13 @@ supabase migration up
 This creates:
 
 - `profiles` table (1:1 with `auth.users`)
-- `accounts` table (1 account per user)
+- `accounts` table (legacy account record)
+- `wallets` table (1 wallet per user, auto-created on signup)
 - `transactions` table
 - RLS policies for owner-scoped reads
-- Trigger that auto-creates profile + account when a new auth user signs up
+- Trigger that auto-creates profile + account + wallet when a new auth user signs up
 
-Migration file: `supabase/migrations/202602270001_init_bank_schema.sql`
+Migration files: `supabase/migrations/202602270001_init_bank_schema.sql`, `supabase/migrations/202602270002_auth_onboarding.sql`, `supabase/migrations/202602270003_wallets.sql`, and `supabase/migrations/202602270004_harden_profile_onboarding_access.sql`
 
 ## 5) Run the API locally
 
@@ -107,10 +108,24 @@ vercel --prod
 ### Auth (Supabase Auth)
 
 - `POST /auth/sign-up`
-  - body: `{ "email": "user@email.com", "password": "strong-password" }`
+  - body: `{ "email": "user@email.com", "password": "strong-password", "phone": "+15555550100" }`
 - `POST /auth/sign-in`
   - body: `{ "email": "user@email.com", "password": "strong-password" }`
 - `GET /auth/me`
+  - header: `Authorization: Bearer <access_token>`
+- `POST /auth/onboarding/send-otp`
+  - header: `Authorization: Bearer <access_token>`
+  - response includes `test_otp` in non-production for mock SMS flows
+- `POST /auth/onboarding/verify-otp`
+  - header: `Authorization: Bearer <access_token>`
+  - body: `{ "otp": "123456" }`
+- `POST /auth/onboarding/set-pin`
+  - header: `Authorization: Bearer <access_token>`
+  - body: `{ "pin": "123456" }`
+- `POST /auth/onboarding/biometric`
+  - header: `Authorization: Bearer <access_token>`
+  - body: `{ "enabled": true }`
+- `GET /auth/onboarding/status`
   - header: `Authorization: Bearer <access_token>`
 
 ### Account
@@ -118,8 +133,16 @@ vercel --prod
 - `GET /accounts/me`
   - header: `Authorization: Bearer <access_token>`
 
+### Wallet
+
+- `GET /wallets/me`
+  - header: `Authorization: Bearer <access_token>`
+
 ## Notes
 
 - Email confirmation behavior depends on your Supabase Auth settings.
+- OTP delivery uses a mock provider pattern; in non-production the test OTP is returned in the API response for demo/testing.
+- Successful OTP verification marks `basic_verification_complete` as true (`"Basic Verification Complete"`).
+- Profile onboarding/security fields are write-protected from direct client JWT access; they must be changed through trusted backend logic (service-role API paths).
 - For local Supabase stack, see `supabase/config.toml`.
 - For Vercel, avoid long-running background jobs in this API process; use separate workers/queues when needed.
