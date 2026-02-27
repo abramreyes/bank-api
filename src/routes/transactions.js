@@ -100,18 +100,16 @@ export function transactionsRouter({ supabaseAdmin }) {
     }
 
     if (!resolvedRecipientUserId && recipientEmail) {
-      const { data: recipientUser, error: recipientUserError } = await supabaseAdmin
-        .schema('auth')
-        .from('users')
-        .select('id')
-        .eq('email', recipientEmail)
-        .single();
+      const { data: recipientId, error: recipientLookupError } = await supabaseAdmin.rpc(
+        'find_user_id_by_email',
+        { p_email: recipientEmail }
+      );
 
-      if (recipientUserError || !recipientUser) {
+      if (recipientLookupError || !recipientId) {
         return res.status(404).json({ error: 'Recipient user not found.' });
       }
 
-      resolvedRecipientUserId = recipientUser.id;
+      resolvedRecipientUserId = recipientId;
     }
 
     if (req.user.id === resolvedRecipientUserId) {
