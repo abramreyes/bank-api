@@ -28,7 +28,11 @@ export function transactionsRouter({ supabaseAdmin }) {
   const router = Router();
 
   router.get('/me', requireAuth(supabaseAdmin), async (req, res) => {
-    const limit = Math.min(Math.max(Number.parseInt(req.query.limit ?? '50', 10), 1), 100);
+    const parsedLimit = Number.parseInt(req.query.limit ?? '20', 10);
+    const parsedPage = Number.parseInt(req.query.page ?? '1', 10);
+    const limit = Number.isNaN(parsedLimit) ? 20 : Math.min(Math.max(parsedLimit, 1), 100);
+    const page = Number.isNaN(parsedPage) ? 1 : Math.max(parsedPage, 1);
+    const offset = (page - 1) * limit;
 
     const { data: wallet, error: walletError } = await supabaseAdmin
       .from('wallets')
@@ -40,20 +44,50 @@ export function transactionsRouter({ supabaseAdmin }) {
       return res.status(404).json({ error: 'Wallet not found for current user.' });
     }
 
-    const { data, error } = await supabaseAdmin
+    const {
+      data,
+      error,
+      count
+    } = await supabaseAdmin
       .from('ledger_entries')
       .select(
-        'id,entry_type,amount,created_at,transaction:transactions!ledger_entries_transaction_id_fkey(id,description,reference,status,sender_wallet_id,recipient_wallet_id)'
+        'id,entry_type,amount,created_at,transaction:transactions!ledger_entries_transaction_id_fkey(id,description,reference,status,sender_wallet_id,recipient_wallet_id)',
+        { count: 'exact' }
       )
       .eq('wallet_id', wallet.wallet_id)
       .order('created_at', { ascending: false })
-      .limit(limit);
+      .range(offset, offset + limit - 1);
 
     if (error) {
       return res.status(500).json({ error: error.message });
     }
 
-    return res.json({ transactions: data ?? [] });
+    const transactions = (data ?? []).map((entry) => ({
+      id: entry.id,
+      sent: entry.entry_type === 'debit',
+      received: entry.entry_type === 'credit',
+      date: entry.created_at,
+      amount: entry.amount,
+      status: entry.transaction?.status ?? null,
+      reference_id: entry.transaction?.reference ?? null,
+      description: entry.transaction?.description ?? null,
+      transaction_id: entry.transaction?.id ?? null
+    }));
+
+    const total = count ?? transactions.length;
+    const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
+
+    return res.json({
+      transactions,
+      pagination: {
+        page,
+        limit,
+        total,
+        total_pages: totalPages,
+        has_next_page: page < totalPages,
+        has_previous_page: page > 1
+      }
+    });
   });
 
   router.post('/transfer', requireAuth(supabaseAdmin), async (req, res) => {

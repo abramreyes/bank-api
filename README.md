@@ -141,9 +141,15 @@ vercel --prod
 
 ### Transactions
 
-- `GET /transactions/me?limit=50`
+- `GET /transactions/me?limit=20&page=1`
   - header: `Authorization: Bearer <access_token>`
-  - returns ledger-based debit/credit entries for the authenticated wallet, newest first
+  - returns transaction history for the authenticated wallet, newest first, with:
+    - `sent` / `received`
+    - `date`
+    - `amount`
+    - `status`
+    - `reference_id`
+  - includes basic pagination metadata (`page`, `limit`, `total`, `total_pages`, `has_next_page`, `has_previous_page`)
 - `POST /transactions/transfer`
   - header: `Authorization: Bearer <access_token>`
   - body: `{ "recipient_user_id": "<uuid>", "amount": 25.5, "description": "Lunch" }`
