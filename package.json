@@ -1,0 +1,24 @@
+{
+  "name": "bank-api",
+  "version": "0.1.0",
+  "description": "Express API starter for a digital bank mobile app using Supabase Auth and migrations.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "check": "node --check src/server.js && node --check src/index.js && node --check src/app.js && node --check api/index.js"
+  },
+  "keywords": [
+    "express",
+    "supabase",
+    "banking-api"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "morgan": "^1.10.0"
+  }
+}
