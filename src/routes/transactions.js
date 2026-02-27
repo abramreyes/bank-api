@@ -28,8 +28,10 @@ export function transactionsRouter({ supabaseAdmin }) {
   const router = Router();
 
   router.get('/me', requireAuth(supabaseAdmin), async (req, res) => {
-    const limit = Math.min(Math.max(Number.parseInt(req.query.limit ?? '20', 10), 1), 100);
-    const page = Math.max(Number.parseInt(req.query.page ?? '1', 10), 1);
+    const parsedLimit = Number.parseInt(req.query.limit ?? '20', 10);
+    const parsedPage = Number.parseInt(req.query.page ?? '1', 10);
+    const limit = Number.isNaN(parsedLimit) ? 20 : Math.min(Math.max(parsedLimit, 1), 100);
+    const page = Number.isNaN(parsedPage) ? 1 : Math.max(parsedPage, 1);
     const offset = (page - 1) * limit;
 
     const { data: wallet, error: walletError } = await supabaseAdmin
