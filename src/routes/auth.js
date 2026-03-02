@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
+import { logAuditEvent } from '../lib/audit.js';
 
 const OTP_TTL_MINUTES = 10;
 
@@ -97,8 +98,28 @@ export function authRouter({ supabaseAdmin, supabaseAnon }) {
     const { data, error } = await supabaseAnon.auth.signInWithPassword({ email, password });
 
     if (error) {
+      await logAuditEvent(supabaseAdmin, {
+        userId: null,
+        action: 'login',
+        resourceType: 'auth',
+        resourceId: normalizedEmail,
+        ip,
+        success: false,
+        metadata: { error: error.message }
+      });
+
       return res.status(401).json({ error: error.message });
     }
+
+    await logAuditEvent(supabaseAdmin, {
+      userId: data.user.id,
+      action: 'login',
+      resourceType: 'auth',
+      resourceId: data.user.id,
+      ip,
+      success: true,
+      metadata: { email: normalizedEmail }
+    });
 
     return res.json({ user: data.user, session: data.session });
   });

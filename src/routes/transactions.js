@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { requireAuth } from '../middleware/auth.js';
+import { logAuditEvent } from '../lib/audit.js';
 
 function verifyPin(pin, pinHash) {
   if (!pinHash || typeof pinHash !== 'string') {
@@ -160,7 +161,7 @@ export function transactionsRouter({ supabaseAdmin }) {
 
     const { data: senderProfile, error: senderProfileError } = await supabaseAdmin
       .from('profiles')
-      .select('pin_hash')
+      .select('pin_hash,pin_failed_attempts,pin_locked_until')
       .eq('id', req.user.id)
       .single();
 
@@ -168,9 +169,70 @@ export function transactionsRouter({ supabaseAdmin }) {
       return res.status(400).json({ error: 'PIN is not configured for this user.' });
     }
 
-    if (!verifyPin(pin, senderProfile.pin_hash)) {
+    const now = Date.now();
+    if (senderProfile.pin_locked_until && new Date(senderProfile.pin_locked_until).getTime() > now) {
+      await logAuditEvent(supabaseAdmin, {
+        userId: req.user.id,
+        action: 'transfer',
+        resourceType: 'wallet',
+        resourceId: resolvedRecipientUserId ?? null,
+        ip: req.ip ?? null,
+        success: false,
+        metadata: {
+          reason: 'pin_locked',
+          locked_until: senderProfile.pin_locked_until,
+          amount,
+          recipient_user_id: resolvedRecipientUserId ?? null
+        }
+      });
+
+      return res.status(403).json({ error: 'PIN is locked due to too many failed attempts. Please try again later.' });
+    }
+
+    const pinOk = verifyPin(pin, senderProfile.pin_hash);
+
+    if (!pinOk) {
+      const maxAttempts = 5;
+      const lockDurationMinutes = 15;
+      const currentAttempts = senderProfile.pin_failed_attempts ?? 0;
+      const nextAttempts = currentAttempts + 1;
+      const shouldLock = nextAttempts >= maxAttempts;
+      const lockedUntil = shouldLock
+        ? new Date(Date.now() + lockDurationMinutes * 60_000).toISOString()
+        : senderProfile.pin_locked_until ?? null;
+
+      await supabaseAdmin
+        .from('profiles')
+        .update({
+          pin_failed_attempts: nextAttempts,
+          pin_locked_until: lockedUntil
+        })
+        .eq('id', req.user.id);
+
+      await logAuditEvent(supabaseAdmin, {
+        userId: req.user.id,
+        action: 'transfer',
+        resourceType: 'wallet',
+        resourceId: resolvedRecipientUserId ?? null,
+        ip: req.ip ?? null,
+        success: false,
+        metadata: {
+          reason: 'invalid_pin',
+          attempts: nextAttempts,
+          locked_until: lockedUntil,
+          amount,
+          recipient_user_id: resolvedRecipientUserId ?? null
+        }
+      });
+
       return res.status(401).json({ error: 'Invalid PIN.' });
     }
+
+    // Successful PIN verification: reset failure counters.
+    await supabaseAdmin
+      .from('profiles')
+      .update({ pin_failed_attempts: 0, pin_locked_until: null })
+      .eq('id', req.user.id);
 
     const { data: senderWallet, error: senderWalletError } = await supabaseAdmin
       .from('wallets')
@@ -196,10 +258,41 @@ export function transactionsRouter({ supabaseAdmin }) {
     });
 
     if (error) {
+      await logAuditEvent(supabaseAdmin, {
+        userId: req.user.id,
+        action: 'transfer',
+        resourceType: 'wallet',
+        resourceId: resolvedRecipientUserId ?? null,
+        ip: req.ip ?? null,
+        success: false,
+        metadata: {
+          reason: 'transfer_failed',
+          supabase_error: error.message,
+          amount,
+          recipient_user_id: resolvedRecipientUserId ?? null
+        }
+      });
+
       return res.status(400).json({ error: error.message });
     }
 
-    return res.status(201).json({ transaction: data?.[0] ?? null });
+    const transaction = data?.[0] ?? null;
+
+    await logAuditEvent(supabaseAdmin, {
+      userId: req.user.id,
+      action: 'transfer',
+      resourceType: 'wallet',
+      resourceId: resolvedRecipientUserId ?? null,
+      ip: req.ip ?? null,
+      success: true,
+      metadata: {
+        amount,
+        recipient_user_id: resolvedRecipientUserId ?? null,
+        transaction_id: transaction?.transaction_id ?? null
+      }
+    });
+
+    return res.status(201).json({ transaction });
   });
 
   return router;
