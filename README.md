@@ -128,6 +128,7 @@ vercel --prod
   - throttled with cooldown + per-user/IP limits; returns `429` with `Retry-After` when exceeded
 - `POST /auth/onboarding/test-sms`
   - header: `Authorization: Bearer <access_token>`
+  - available only when `NODE_ENV` is not `production`
   - sends a test SMS to the authenticated user's profile phone using the configured provider
 - `POST /auth/onboarding/verify-otp`
   - header: `Authorization: Bearer <access_token>`

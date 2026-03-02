@@ -299,43 +299,45 @@ export function authRouter({ supabaseAdmin, supabaseAnon, smsProvider }) {
     }
   });
 
-  router.post('/onboarding/test-sms', requireAuth(supabaseAdmin), async (req, res) => {
-    const otp = generateOtp();
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .select('phone')
-      .eq('id', req.user.id)
-      .single();
+  if (process.env.NODE_ENV !== 'production') {
+    router.post('/onboarding/test-sms', requireAuth(supabaseAdmin), async (req, res) => {
+      const otp = generateOtp();
+      const { data: profile, error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .select('phone')
+        .eq('id', req.user.id)
+        .single();
 
-    if (profileError) {
-      return res.status(500).json({ error: profileError.message });
-    }
+      if (profileError) {
+        return res.status(500).json({ error: profileError.message });
+      }
 
-    if (!profile?.phone) {
-      return res.status(400).json({ error: 'No phone number found for this user.' });
-    }
+      if (!profile?.phone) {
+        return res.status(400).json({ error: 'No phone number found for this user.' });
+      }
 
-    if (!isLikelyE164Phone(profile.phone)) {
-      return res.status(400).json({ error: 'Phone number must be in E.164 format (example: +15555550123).' });
-    }
+      if (!isLikelyE164Phone(profile.phone)) {
+        return res.status(400).json({ error: 'Phone number must be in E.164 format (example: +15555550123).' });
+      }
 
-    try {
-      const smsResult = await smsProvider.sendOtp({ to: profile.phone, otp });
-      const includeTestOtp = process.env.NODE_ENV !== 'production' && smsResult.provider !== 'twilio';
+      try {
+        const smsResult = await smsProvider.sendOtp({ to: profile.phone, otp });
+        const includeTestOtp = process.env.NODE_ENV !== 'production' && smsResult.provider !== 'twilio';
 
-      return res.json({
-        message: `Test SMS sent via ${smsResult.provider} SMS provider.`,
-        to: profile.phone,
-        provider: smsResult.provider,
-        message_sid: smsResult.messageSid,
-        test_otp: includeTestOtp ? otp : undefined
-      });
-    } catch (smsError) {
-      return res.status(502).json({
-        error: smsError instanceof Error ? smsError.message : 'Failed to send test SMS via provider.'
-      });
-    }
-  });
+        return res.json({
+          message: `Test SMS sent via ${smsResult.provider} SMS provider.`,
+          to: profile.phone,
+          provider: smsResult.provider,
+          message_sid: smsResult.messageSid,
+          test_otp: includeTestOtp ? otp : undefined
+        });
+      } catch (smsError) {
+        return res.status(502).json({
+          error: smsError instanceof Error ? smsError.message : 'Failed to send test SMS via provider.'
+        });
+      }
+    });
+  }
 
   router.post('/onboarding/verify-otp', requireAuth(supabaseAdmin), async (req, res) => {
     const { otp } = req.body;
