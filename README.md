@@ -76,7 +76,7 @@ npm start
 
 ## 6) Deploy to Vercel (temporary hosting)
 
-This repo is configured with `vercel.json` and `api/index.js` so all routes map to the Express app as a serverless function.
+This repo is configured with `vercel.json` and `api/index.ts` so all routes map to the Express app as a serverless function.
 
 ### Option A: Vercel dashboard
 
