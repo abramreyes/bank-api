@@ -65,7 +65,7 @@ This creates:
 - RLS policies for owner-scoped reads
 - Trigger that auto-creates profile + account + wallet when a new auth user signs up
 
-Migration files: `supabase/migrations/202602270001_init_bank_schema.sql`, `supabase/migrations/202602270002_auth_onboarding.sql`, `supabase/migrations/202602270003_wallets.sql`, `supabase/migrations/202602270004_harden_profile_onboarding_access.sql`, and `supabase/migrations/202602270005_ledger_engine.sql`
+Migration files: `supabase/migrations/202602270001_init_bank_schema.sql`, `supabase/migrations/202602270002_auth_onboarding.sql`, `supabase/migrations/202602270003_wallets.sql`, `supabase/migrations/202602270004_harden_profile_onboarding_access.sql`, `supabase/migrations/202602270005_ledger_engine.sql`, `supabase/migrations/202602270007_login_rate_limit.sql`, and `supabase/migrations/202603020001_otp_send_rate_limit.sql`
 
 ## 5) Run the API locally
 
@@ -125,6 +125,7 @@ vercel --prod
   - header: `Authorization: Bearer <access_token>`
   - response includes `provider` (`twilio` or `mock`)
   - `test_otp` is only returned in non-production when using the mock provider
+  - throttled with cooldown + per-user/IP limits; returns `429` with `Retry-After` when exceeded
 - `POST /auth/onboarding/test-sms`
   - header: `Authorization: Bearer <access_token>`
   - sends a test SMS to the authenticated user's profile phone using the configured provider

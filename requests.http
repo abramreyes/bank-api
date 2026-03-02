@@ -1,4 +1,4 @@
-@baseUrl = https://bank-api-omega.vercel.app/
+@baseUrl = https://bank-k7mdrraje-abramrs-projects.vercel.app/
 
 ### Health check
 GET {{baseUrl}}/health
