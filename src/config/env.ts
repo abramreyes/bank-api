@@ -1,3 +1,5 @@
+import 'dotenv/config';
+
 const required = [
   'SUPABASE_URL',
   'SUPABASE_ANON_KEY',

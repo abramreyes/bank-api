@@ -1,0 +1,65 @@
+@baseUrl = https://bank-api-omega.vercel.app/
+
+### Health check
+GET {{baseUrl}}/health
+
+### Sign up
+POST {{baseUrl}}/auth/sign-up
+Content-Type: application/json
+
+{
+  "email": "test-user@example.com",
+  "password": "TestPassword123!",
+  "phone": "+15555550123"
+}
+
+### Sign in
+POST {{baseUrl}}/auth/sign-in
+Content-Type: application/json
+
+{
+  "email": "test-user@example.com",
+  "password": "TestPassword123!"
+}
+
+### Get current user (auth/me)
+# Replace <ACCESS_TOKEN> with the access_token from sign-in or sign-up response
+GET {{baseUrl}}/auth/me
+Authorization: Bearer <ACCESS_TOKEN>
+
+### Onboarding - send OTP
+POST {{baseUrl}}/auth/onboarding/send-otp
+Authorization: Bearer <ACCESS_TOKEN> 
+
+### Onboarding - verify OTP
+# Replace <OTP_CODE> with the test_otp returned from send-otp (non-production)
+POST {{baseUrl}}/auth/onboarding/verify-otp
+Content-Type: application/json
+Authorization: Bearer <ACCESS_TOKEN>
+
+{
+  "otp": "<OTP_CODE>"
+}
+
+### Onboarding - set PIN
+POST {{baseUrl}}/auth/onboarding/set-pin
+Content-Type: application/json
+Authorization: Bearer <ACCESS_TOKEN>
+
+{
+  "pin": "123456"
+}
+
+### Onboarding - toggle biometric
+POST {{baseUrl}}/auth/onboarding/biometric
+Content-Type: application/json
+Authorization: Bearer <ACCESS_TOKEN>
+
+{
+  "enabled": true
+}
+
+### Onboarding - status
+GET {{baseUrl}}/auth/onboarding/status
+Authorization: Bearer <ACCESS_TOKEN>
+
