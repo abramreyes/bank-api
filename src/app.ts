@@ -7,9 +7,11 @@ import { authRouter } from './routes/auth.js';
 import { accountsRouter } from './routes/accounts.js';
 import { walletsRouter } from './routes/wallets.js';
 import { transactionsRouter } from './routes/transactions.js';
+import { createSmsProvider } from './lib/sms.js';
 
 export function createApp(config) {
   const { admin: supabaseAdmin, anon: supabaseAnon } = createSupabaseClients(config);
+  const smsProvider = createSmsProvider(config);
 
   const app = express();
 
@@ -18,7 +20,7 @@ export function createApp(config) {
   app.use(express.json());
 
   app.use('/health', healthRouter());
-  app.use('/auth', authRouter({ supabaseAdmin, supabaseAnon }));
+  app.use('/auth', authRouter({ supabaseAdmin, supabaseAnon, smsProvider }));
   app.use('/accounts', accountsRouter({ supabaseAdmin }));
   app.use('/wallets', walletsRouter({ supabaseAdmin }));
   app.use('/transactions', transactionsRouter({ supabaseAdmin }));
