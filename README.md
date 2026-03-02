@@ -29,6 +29,10 @@ Set these variables in your shell, Vercel project settings, or process manager b
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `TWILIO_ACCOUNT_SID` (optional; enables Twilio OTP delivery when paired with token + sender)
+- `TWILIO_AUTH_TOKEN` (optional)
+- `TWILIO_FROM_NUMBER` (optional; required if `TWILIO_MESSAGING_SERVICE_SID` not set)
+- `TWILIO_MESSAGING_SERVICE_SID` (optional; alternative to `TWILIO_FROM_NUMBER`)
 
 Example for local shell:
 
@@ -37,6 +41,9 @@ export PORT=4000
 export SUPABASE_URL="https://YOUR_PROJECT_ID.supabase.co"
 export SUPABASE_ANON_KEY="your-anon-key"
 export SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
+export TWILIO_ACCOUNT_SID="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+export TWILIO_AUTH_TOKEN="your-twilio-auth-token"
+export TWILIO_FROM_NUMBER="+15555550123"
 ```
 
 > Vercel note: set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` in Project Settings → Environment Variables.
@@ -85,6 +92,7 @@ This repo is configured with `vercel.json` and `api/index.ts` so all routes map 
    - `SUPABASE_URL`
    - `SUPABASE_ANON_KEY`
    - `SUPABASE_SERVICE_ROLE_KEY`
+   - Twilio variables above (optional, for real SMS)
 3. Deploy.
 
 ### Option B: Vercel CLI
@@ -115,7 +123,11 @@ vercel --prod
   - header: `Authorization: Bearer <access_token>`
 - `POST /auth/onboarding/send-otp`
   - header: `Authorization: Bearer <access_token>`
-  - response includes `test_otp` in non-production for mock SMS flows
+  - response includes `provider` (`twilio` or `mock`)
+  - `test_otp` is only returned in non-production when using the mock provider
+- `POST /auth/onboarding/test-sms`
+  - header: `Authorization: Bearer <access_token>`
+  - sends a test SMS to the authenticated user's profile phone using the configured provider
 - `POST /auth/onboarding/verify-otp`
   - header: `Authorization: Bearer <access_token>`
   - body: `{ "otp": "123456" }`
@@ -158,7 +170,8 @@ vercel --prod
 ## Notes
 
 - Email confirmation behavior depends on your Supabase Auth settings.
-- OTP delivery uses a mock provider pattern; in non-production the test OTP is returned in the API response for demo/testing.
+- OTP delivery uses Twilio when Twilio env vars are configured; otherwise it falls back to a mock provider.
+- In non-production, `test_otp` is returned only for mock-provider flows to support local testing.
 - Successful OTP verification marks `basic_verification_complete` as true (`"Basic Verification Complete"`).
 - Profile onboarding/security fields are write-protected from direct client JWT access; they must be changed through trusted backend logic (service-role API paths).
 - For local Supabase stack, see `supabase/config.toml`.

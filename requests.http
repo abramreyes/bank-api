@@ -31,6 +31,10 @@ Authorization: Bearer <ACCESS_TOKEN>
 POST {{baseUrl}}/auth/onboarding/send-otp
 Authorization: Bearer <ACCESS_TOKEN> 
 
+### Onboarding - test SMS
+POST {{baseUrl}}/auth/onboarding/test-sms
+Authorization: Bearer <ACCESS_TOKEN>
+
 ### Onboarding - verify OTP
 # Replace <OTP_CODE> with the test_otp returned from send-otp (non-production)
 POST {{baseUrl}}/auth/onboarding/verify-otp
@@ -62,4 +66,3 @@ Authorization: Bearer <ACCESS_TOKEN>
 ### Onboarding - status
 GET {{baseUrl}}/auth/onboarding/status
 Authorization: Bearer <ACCESS_TOKEN>
-
