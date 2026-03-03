@@ -236,12 +236,16 @@ export function transactionsRouter({ supabaseAdmin }) {
 
     const { data: senderWallet, error: senderWalletError } = await supabaseAdmin
       .from('wallets')
-      .select('balance')
+      .select('balance,status')
       .eq('user_id', req.user.id)
       .single();
 
     if (senderWalletError || !senderWallet) {
       return res.status(404).json({ error: 'Sender wallet not found.' });
+    }
+
+    if (senderWallet.status !== 'active') {
+      return res.status(403).json({ error: 'Sender wallet is not active.' });
     }
 
     if (Number(senderWallet.balance) < amount) {
@@ -278,6 +282,25 @@ export function transactionsRouter({ supabaseAdmin }) {
 
     const transaction = data?.[0] ?? null;
 
+    if (!transaction || transaction.status !== 'completed') {
+      await logAuditEvent(supabaseAdmin, {
+        userId: req.user.id,
+        action: 'transfer',
+        resourceType: 'wallet',
+        resourceId: resolvedRecipientUserId ?? null,
+        ip: req.ip ?? null,
+        success: false,
+        metadata: {
+          reason: 'transfer_failed',
+          amount,
+          recipient_user_id: resolvedRecipientUserId ?? null,
+          transaction_id: transaction?.transaction_id ?? null
+        }
+      });
+
+      return res.status(400).json({ error: 'Transfer failed. Please try again.' });
+    }
+
     await logAuditEvent(supabaseAdmin, {
       userId: req.user.id,
       action: 'transfer',
@@ -288,7 +311,7 @@ export function transactionsRouter({ supabaseAdmin }) {
       metadata: {
         amount,
         recipient_user_id: resolvedRecipientUserId ?? null,
-        transaction_id: transaction?.transaction_id ?? null
+        transaction_id: transaction.transaction_id
       }
     });
 
