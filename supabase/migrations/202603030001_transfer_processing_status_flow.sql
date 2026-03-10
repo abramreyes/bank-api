@@ -4,6 +4,12 @@
 alter table public.transactions
   drop constraint if exists transactions_status_check;
 
+-- Backfill legacy transfer rows written by older ledger logic.
+-- Previous migrations used status='posted' for successful transfers.
+update public.transactions
+set status = 'completed'
+where status = 'posted';
+
 alter table public.transactions
   add constraint transactions_status_check
   check (status in ('pending', 'processing', 'completed', 'failed'));
